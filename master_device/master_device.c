@@ -29,10 +29,20 @@
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
 #define BUF_SIZE 512
+#define NPAGES 50
 
 typedef struct socket * ksocket_t;
 
 struct dentry  *file1;//debug file
+
+//newly added functions and structure for mmap
+static int my_mmap(struct file *filp, struct vm_area_struct *vma);
+void my_mmap_open(struct vm_area_struct *vma);
+void my_mmap_close(struct vm_area_struct *vma);
+static struct vm_operations_struct my_mmap_vm_ops = {
+	.open = my_mmap_open,
+	.close = my_mmap_close
+};
 
 //functions about kscoket are exported, and thus we use extern here
 extern ksocket_t ksocket(int domain, int type, int protocol);
@@ -64,7 +74,8 @@ static struct file_operations master_fops = {
 	.unlocked_ioctl = master_ioctl,
 	.open = master_open,
 	.write = send_msg,
-	.release = master_close
+	.release = master_close,
+	.mmap = my_mmap
 };
 
 //device info
@@ -137,14 +148,33 @@ static void __exit master_exit(void)
 
 int master_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data);
 	return 0;
 }
 
 int master_open(struct inode *inode, struct file *filp)
 {
+	filp->private_data = kmalloc(PAGE_SIZE * NPAGES, GFP_KERNEL);
 	return 0;
 }
 
+static int my_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	if(remap_pfn_range(vma,vma->vm_start,vma->vm_pgoff,vma->vm_end - vma->vm_start, vma->vm_page_prot))
+		return -EAGAIN;
+	vma->vm_private_data = filp->private_data;
+	vma->vm_ops = &my_mmap_vm_ops;
+	my_mmap_open(vma);
+	return 0;
+}
+void my_mmap_open(struct vm_area_struct *vma)
+{
+	return ;
+}
+void my_mmap_close(struct vm_area_struct *vma)
+{
+	return ;
+}
 
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
@@ -175,6 +205,8 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
+			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
+			ret = 0;
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)

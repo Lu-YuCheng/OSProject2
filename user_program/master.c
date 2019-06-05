@@ -10,6 +10,7 @@
 #include <sys/time.h>
 
 #define PAGE_SIZE 4096
+#define NPAGE 50
 #define BUF_SIZE 512
 size_t get_filesize(const char* filename);//get the size of the input file
 
@@ -18,7 +19,7 @@ int main (int argc, char* argv[])
 {
 	char buf[BUF_SIZE];
 	int i, dev_fd, file_fd;// the fd for the device and the fd for the input file
-	size_t ret, file_size, offset = 0, tmp;
+	size_t ret, file_size, offset = 0, length = NPAGE * PAGE_SIZE;
 	char file_name[50], method[20];
 	char *kernel_address = NULL, *file_address = NULL;
 	struct timeval start;
@@ -64,6 +65,27 @@ int main (int argc, char* argv[])
 				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
 				write(dev_fd, buf, ret);//write to the the device
 			}while(ret > 0);
+			break;
+		case 'm': //mmap : memcpy() and mmap()
+			while(offset < file_size)
+			{
+				char *file_addr, *dev_addr;
+				if(offset + length > file_size)
+					length = file_size - offset;
+				file_addr = mmap(NULL, length, PROT_READ, MAP_PRIVATE, file_fd, offset);
+				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_PRIVATE, dev_fd, 0);
+
+				memcpy(dev_addr,file_addr,length);
+				if(ioctl(dev_fd, 0x12345678, length) == -1)
+				{
+					perror("ioctl server sending error\n");
+					return 1;
+				}
+
+				munmap(file_addr, length);
+				munmap(dev_addr, length);
+				offset += length;
+			}
 			break;
 	}
 
