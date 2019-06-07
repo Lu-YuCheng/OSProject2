@@ -207,8 +207,8 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 		case slave_IOCTL_MMAP:
 			while(1){
 	            recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
-	            if (rec_n == 0) break;
-	            memcpy(file->private_data + offset, buf, rec_n);
+	            if (recv_n == 0) break;
+	            memcpy(file->private_data + offset, buf, recv_n);
 	            offset += recv_n;
 	            if (offset >= PAGE_SIZE * NPAGES) break;
 	         }
