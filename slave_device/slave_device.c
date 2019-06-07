@@ -194,7 +194,6 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	            if (offset >= PAGE_SIZE * NPAGES) break;
 	         }
 	        ret = offset;
-	        offset = 0;
 	        break;
 
 		case slave_IOCTL_EXIT:
