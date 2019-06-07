@@ -20,6 +20,7 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
+#include <linux/workqueue.h>
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -70,8 +71,7 @@ static int addr_len;
 
 // struct for workqueue
 static struct workqueue_struct *wq;
-static void work_handler(struct work_struct *work);
-DECLARE_WORK(work, work_handler);
+DECLARE_WORK(work, (void*)send_msg);
 DECLARE_WAIT_QUEUE_HEAD(wait);
 static char sockbuf[BUF_SIZE];
 static int datalen;
@@ -141,7 +141,7 @@ static int __init master_init(void)
 		return -1;
 	}
 	
-	//queue_work(wq, &work);
+	queue_work(wq, &work);
 	
     printk("master_device init OK\n");
 	set_fs(old_fs);
@@ -269,11 +269,12 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 		return -ENOMEM;
 		
 	datalen = count;
-	queue_work(wq, &work);
-	
-	if(wait_event_interruptible(wait, datalen > 0) != 0)
-	{
-		return -ERESTARTSYS;
+	//queue_work(wq, &work);
+
+	if(datalen > 0) {
+		sockbuf[datalen] = 0;
+		printk(KERN_INFO "recv_from_master_program: %s", sockbuf);
+		ksend(sockfd_cli, sockbuf, datalen, 0);
 	}
 
 	datalen = 0;	
@@ -281,16 +282,6 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 	return count;
 }
 #endif
-static void work_handler(struct work_struct *work)
-{
-	if(datalen > 0) {
-		sockbuf[datalen] = 0;
-		printk(KERN_INFO "recv_from_master_program: %s", sockbuf);
-		ksend(sockfd_cli, sockbuf, datalen, 0);
-		wake_up_interruptible(&wait);
-	}
-	return;
-}
 
 module_init(master_init);
 module_exit(master_exit);
