@@ -19,6 +19,7 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>
 #include <asm/page.h>
+#include <linux/workqueue.h>
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -65,8 +66,7 @@ static struct sockaddr_in addr_srv; //address of the master server
 
 // struct for workqueue
 static struct workqueue_struct *wq;
-static void work_handler(struct work_struct *work);
-DECLARE_WORK(work, work_handler);
+DECLARE_WORK(work, (void*)receive_msg);
 DECLARE_WAIT_QUEUE_HEAD(wait);
 static char sockbuf[BUF_SIZE];
 static int datalen;
@@ -104,7 +104,7 @@ static int __init slave_init(void)
 		return 1;
 	}
 
-	//queue_work(wq, &work);
+	queue_work(wq, &work);
 
 	printk(KERN_INFO "slave has been registered!\n");
 
@@ -260,23 +260,17 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 	usr_buf_addr = buf;
 	datalen = len;
 	
-	if(wait_event_interruptible(wait, datalen > 0) != 0)	
-		return -ERESTARTSYS;
+	if(datalen > 0) {
+		sockbuf[datalen] = 0;
+		printk(KERN_INFO "recv_from_ksocket: %s", sockbuf);
+		copy_to_user(usr_buf_addr, sockbuf, datalen);
+	}
 		
 	datalen = 0;
 	
 	return len;
 }
 #endif
-static void work_handler(struct work_struct *work)
-{
-	if(datalen > 0) {
-		sockbuf[datalen] = 0;
-		printk(KERN_INFO "recv_from_ksocket: %s", sockbuf);
-		copy_to_user(usr_buf_addr, sockbuf, datalen);
-	}
-	return;
-}
 
 module_init(slave_init);
 module_exit(slave_exit);
