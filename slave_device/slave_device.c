@@ -19,8 +19,6 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>
 #include <asm/page.h>
-
-
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -29,15 +27,21 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-
 #define BUF_SIZE 512
-
-
-
+#define NPAGES 50
 
 struct dentry  *file1;//debug file
 
 typedef struct socket * ksocket_t;
+
+//newly added functions and structure for mmap
+static int my_mmap(struct file *filp, struct vm_area_struct *vma);
+void my_mmap_open(struct vm_area_struct *vma);
+void my_mmap_close(struct vm_area_struct *vma);
+static struct vm_operations_struct my_mmap_vm_ops = {
+	.open = my_mmap_open,
+	.close = my_mmap_close
+};
 
 //functions about kscoket are exported,and thus we use extern here
 extern ksocket_t ksocket(int domain, int type, int protocol);
@@ -66,6 +70,7 @@ static struct file_operations slave_fops = {
 	.open = slave_open,
 	.read = receive_msg,
 	.release = slave_close
+	.mmap = my_mmap
 };
 
 //device info
@@ -101,23 +106,41 @@ static void __exit slave_exit(void)
 
 int slave_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data);
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
+	filp->private_data = kmalloc(PAGE_SIZE * NPAGES, GFP_KERNEL);
 	return 0;
 }
+
+static int my_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	if(remap_pfn_range(vma,vma->vm_start,vma->vm_pgoff,vma->vm_end - vma->vm_start, vma->vm_page_prot))
+		return -EAGAIN;
+	vma->vm_private_data = filp->private_data;
+	vma->vm_ops = &my_mmap_vm_ops;
+	my_mmap_open(vma);
+	return 0;
+}
+void my_mmap_open(struct vm_area_struct *vma)
+{
+	/* Do nothing */
+}
+void my_mmap_close(struct vm_area_struct *vma)
+{
+	/* Do nothing */
+}
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
 
 	int addr_len ;
-	unsigned int i;
-	size_t len, data_size = 0;
+	size_t offset = 0, recv_n;
 	char *tmp, ip[20], buf[BUF_SIZE];
-	struct page *p_print;
-	unsigned char *px;
 
     pgd_t *pgd;
 	p4d_t *p4d;
@@ -163,8 +186,16 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-
-			break;
+			while(1){
+	            recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
+	            if (rec_n == 0) break;
+	            memcpy(file->private_data + offset, buf, rec_n);
+	            offset += recv_n;
+	            if (offset >= PAGE_SIZE * NPAGES) break;
+	         }
+	        ret = offset;
+	        offset = 0;
+	        break;
 
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -172,6 +203,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 				printk("kclose cli error\n");
 				return -1;
 			}
+			set_fs(old_fs);
 			ret = 0;
 			break;
 		default:
@@ -185,8 +217,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 	}
-    set_fs(old_fs);
-
+    
 	return ret;
 }
 
