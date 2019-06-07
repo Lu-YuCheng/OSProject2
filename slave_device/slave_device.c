@@ -77,7 +77,7 @@ static struct file_operations slave_fops = {
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close
+	.release = slave_close,
 	.mmap = my_mmap
 };
 
