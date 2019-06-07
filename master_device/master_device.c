@@ -31,9 +31,9 @@
 #define BUF_SIZE 512
 #define NPAGES 50
 
-typedef struct socket * ksocket_t;
+typedef struct socket *ksocket_t;
 
-struct dentry  *file1;//debug file
+struct dentry *file1; //debug file
 
 //newly added functions and structure for mmap
 static int my_mmap(struct file *filp, struct vm_area_struct *vma);
@@ -67,6 +67,14 @@ static struct sockaddr_in addr_cli;//address for slave
 static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
+
+// struct for workqueue
+static struct workqueue_struct *wq;
+static void work_handler(struct work_struct *work);
+DECLARE_WORK(work, work_handler);
+DECLARE_WAIT_QUEUE_HEAD(wait);
+static char sockbuf[BUF_SIZE];
+static int datalen;
 
 //file operations
 static struct file_operations master_fops = {
@@ -127,6 +135,14 @@ static int __init master_init(void)
 		printk("listen failed\n");
 		return -1;
 	}
+	if((wq = create_workqueue("master_wq")) == NULL)
+	{
+		printk(KERN_ERR "create_workqueue returned NULL\n");
+		return -1;
+	}
+	
+	//queue_work(wq, &work);
+	
     printk("master_device init OK\n");
 	set_fs(old_fs);
 	return 0;
@@ -141,6 +157,7 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
+	if(wq != NULL)	destroy_workqueue(wq);
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
@@ -197,11 +214,12 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 				return -1;
 			}
 			else
-				printk("aceept sockfd_cli = 0x%p\n", sockfd_cli);
+				printk("accept sockfd_cli = 0x%p\n", sockfd_cli);
 
 			tmp = inet_ntoa(&addr_cli.sin_addr);
 			printk("got connected from : %s %d\n", tmp, ntohs(addr_cli.sin_port));
 			kfree(tmp);
+			printk("kfree(tmp)");
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
@@ -231,6 +249,8 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	set_fs(old_fs);
 	return ret;
 }
+
+#ifndef ASYCHRONOUSIO
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
 //call when user is writing to this device
@@ -242,9 +262,35 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 	return count;
 
 }
+#else
+static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
+{
+	if(copy_from_user(sockbuf, buf, count))
+		return -ENOMEM;
+		
+	datalen = count;
+	queue_work(wq, &work);
+	
+	if(wait_event_interruptible(wait, datalen > 0) != 0)
+	{
+		return -ERESTARTSYS;
+	}
 
-
-
+	datalen = 0;	
+	
+	return count;
+}
+#endif
+static void work_handler(struct work_struct *work)
+{
+	if(datalen > 0) {
+		sockbuf[datalen] = 0;
+		printk(KERN_INFO "recv_from_master_program: %s", sockbuf);
+		ksend(sockfd_cli, sockbuf, datalen, 0);
+		wake_up_interruptible(&wait);
+	}
+	return;
+}
 
 module_init(master_init);
 module_exit(master_exit);

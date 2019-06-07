@@ -29,11 +29,7 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-
 #define BUF_SIZE 512
-
-
-
 
 struct dentry  *file1;//debug file
 
@@ -58,6 +54,14 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp );
 static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
+
+// struct for workqueue
+static struct workqueue_struct *wq;
+static void work_handler(struct work_struct *work);
+DECLARE_WORK(work, work_handler);
+DECLARE_WAIT_QUEUE_HEAD(wait);
+static char sockbuf[BUF_SIZE];
+static int datalen;
 
 //file operations
 static struct file_operations slave_fops = {
@@ -85,6 +89,13 @@ static int __init slave_init(void)
 		printk(KERN_ERR "misc_register failed!\n");
 		return ret;
 	}
+	
+	if((wq = create_workqueue("slave_wq")) == NULL){
+		printk(KERN_ERR "create_workqueue returned NULL\n");
+		return 1;
+	}
+
+	//queue_work(wq, &work);
 
 	printk(KERN_INFO "slave has been registered!\n");
 
@@ -94,6 +105,7 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
+	if(wq != NULL)	destroy_workqueue(wq);
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
@@ -108,11 +120,14 @@ int slave_open(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
+
+// static char ip[20];
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
 
-	int addr_len ;
+	int addr_len;
 	unsigned int i;
 	size_t len, data_size = 0;
 	char *tmp, ip[20], buf[BUF_SIZE];
@@ -190,6 +205,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	return ret;
 }
 
+#ifndef ASYCHRONOUSIO
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 {
 //call when user is reading from this device
@@ -200,9 +216,33 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 		return -ENOMEM;
 	return len;
 }
-
-
-
+char *usr_buf_addr;
+#else
+ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
+{
+	int len;
+	
+	len = krecv(sockfd_cli, sockbuf, sizeof(sockbuf), 0);
+	usr_buf_addr = buf;
+	datalen = len;
+	
+	if(wait_event_interruptible(wait, datalen > 0) != 0)	
+		return -ERESTARTSYS;
+		
+	datalen = 0;
+	
+	return len;
+}
+#endif
+static void work_handler(struct work_struct *work)
+{
+	if(datalen > 0) {
+		sockbuf[datalen] = 0;
+		printk(KERN_INFO "recv_from_ksocket: %s", sockbuf);
+		copy_to_user(usr_buf_addr, sockbuf, datalen);
+	}
+	return;
+}
 
 module_init(slave_init);
 module_exit(slave_exit);
