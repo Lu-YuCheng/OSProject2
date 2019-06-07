@@ -12,63 +12,51 @@
 #define PAGE_SIZE 4096
 #define NPAGE 50
 #define BUF_SIZE 512
-size_t get_filesize(const char* filename);//get the size of the input file
+#define EXIT_FAILURE 1
+#define HANDLE_FATAL(r, x) if (r < 0) do { fprintf(stderr, "[-] SYSTEM ERROR : %s\n", #x); \
+		fprintf(stderr, "\tLocation : %s(), %s:%u\n", __FUNCTION__, __FILE__, __LINE__); \
+		perror("      OS message "); fprintf(stderr, "\n"); return EXIT_FAILURE; } while (0)
 
+size_t get_filesize(const char* filename);//get the size of the input file
 
 int main (int argc, char* argv[])
 {
 	char buf[BUF_SIZE];
-	int i, dev_fd, file_fd;// the fd for the device and the fd for the input file
-	size_t ret, file_size, offset = 0, length = NPAGE * PAGE_SIZE;
+	int i, ret, dev_fd, file_fd;// the fd for the device and the fd for the input file
+	size_t nread, file_size, offset = 0, length = NPAGE * PAGE_SIZE;
 	char file_name[50], method[20];
 	char *kernel_address = NULL, *file_address = NULL;
-	struct timeval start;
-	struct timeval end;
+	struct timeval start, end;
 	double trans_time; //calulate the time between the device is opened and it is closed
-
 
 	strcpy(file_name, argv[1]);
 	strcpy(method, argv[2]);
 
+	dev_fd = open("/dev/master_device", O_RDWR);
+	HANDLE_FATAL(dev_fd, "failed to open /dev/master_device");
+	
+	gettimeofday(&start, NULL); /* Get current time precise to nsec */
+	
+	file_fd = open(file_name, O_RDWR);
+	HANDLE_FATAL(file_fd, "failed to open input file");
 
-	if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
-	{
-		perror("failed to open /dev/master_device\n");
-		return 1;
-	}
-	gettimeofday(&start ,NULL);
-	if( (file_fd = open (file_name, O_RDWR)) < 0 )
-	{
-		perror("failed to open input file\n");
-		return 1;
-	}
-
-	if( (file_size = get_filesize(file_name)) < 0)
-	{
-		perror("failed to get filesize\n");
-		return 1;
-	}
+	file_size = get_filesize(file_name);
+	HANDLE_FATAL(file_size, "failed to get filesize");
 
 
-	if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
-	{
-		perror("ioclt server create socket error\n");
-		return 1;
-	}
+	ret = ioctl(dev_fd, 0x12345677); //0x12345677 : create socket and accept the connection from the slave
+	HANDLE_FATAL(ret, "ioclt server create socket error");
 
-
-	switch(method[0])
-	{
+	switch (method[0]) {
 		case 'f': //fcntl : read()/write()
 			do
 			{
-				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
-				write(dev_fd, buf, ret);//write to the the device
-			}while(ret > 0);
+				nread = read(file_fd, buf, sizeof(buf)); // read from the input file
+				write(dev_fd, buf, nread);//write to the the device
+			} while(nread > 0);
 			break;
 		case 'm': //mmap : memcpy() and mmap()
-			while(offset < file_size)
-			{
+			while(offset < file_size) {
 				char *file_addr, *dev_addr;
 				if(offset + length > file_size)
 					length = file_size - offset;
@@ -76,11 +64,8 @@ int main (int argc, char* argv[])
 				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_PRIVATE, dev_fd, 0);
 
 				memcpy(dev_addr,file_addr,length);
-				if(ioctl(dev_fd, 0x12345678, length) == -1)
-				{
-					perror("ioctl server sending error\n");
-					return 1;
-				}
+				ret = ioctl(dev_fd, 0x12345678, length);
+				HANDLE_FATAL(ret, "ioctl server sending error");
 
 				munmap(file_addr, length);
 				munmap(dev_addr, length);
@@ -89,14 +74,13 @@ int main (int argc, char* argv[])
 			break;
 	}
 
-	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
-	{
-		perror("ioclt server exits error\n");
-		return 1;
-	}
+	ret = ioctl(dev_fd, 0x12345679); // end sending data, close the connection
+	HANDLE_FATAL(ret, "ioclt server exits error");
+	
 	gettimeofday(&end, NULL);
+	
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %d bytes\n", trans_time, file_size / 8);
+	printf("Transmission time: %lf ms, File size: %lu bytes\n", trans_time, file_size / 8);
 
 	close(file_fd);
 	close(dev_fd);
