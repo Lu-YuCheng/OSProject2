@@ -204,7 +204,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
+			recv_n = krecv(sockfd_cli, file->private_data, sizeof(buf), 0);
 			ret = recv_n;
 			break;
 		case slave_IOCTL_EXIT:
