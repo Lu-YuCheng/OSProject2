@@ -70,8 +70,8 @@ int main (int argc, char* argv[])
 				munmap(file_addr, length);
 				munmap(dev_addr, length);
 				offset += length;
+				file_size += length;
 			}
-			file_size = offset;
 			break;
 	}
 

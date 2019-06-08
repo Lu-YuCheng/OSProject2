@@ -97,13 +97,15 @@ static int __init slave_init(void)
 		printk(KERN_ERR "misc_register failed!\n");
 		return ret;
 	}
-	
+
+	/*	
 	if((wq = create_workqueue("slave_wq")) == NULL){
 		printk(KERN_ERR "create_workqueue returned NULL\n");
 		return 1;
 	}
 
 	queue_work(wq, &work);
+	*/
 
 	printk(KERN_INFO "slave has been registered!\n");
 
@@ -113,7 +115,9 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
+	/*
 	if(wq != NULL)	destroy_workqueue(wq);
+	*/
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
@@ -204,7 +208,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
+			recv_n = krecv(sockfd_cli, file->private_data, sizeof(buf), 0);
 			ret = recv_n;
 			break;
 		case slave_IOCTL_EXIT:
@@ -213,7 +217,6 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 				printk("kclose cli error\n");
 				return -1;
 			}
-			set_fs(old_fs);
 			ret = 0;
 			break;
 		default:
@@ -227,7 +230,8 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 	}
-    
+
+	set_fs(old_fs);
 	return ret;
 }
 
