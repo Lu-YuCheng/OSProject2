@@ -60,8 +60,8 @@ int main (int argc, char* argv[])
 				char *file_addr, *dev_addr;
 				if(offset + length > file_size)
 					length = file_size - offset;
-				file_addr = mmap(NULL, length, PROT_READ, MAP_PRIVATE, file_fd, offset);
-				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_PRIVATE, dev_fd, 0);
+				file_addr = mmap(NULL, length, PROT_READ, MAP_SHARED, file_fd, offset);
+				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_SHARED, dev_fd, 0);
 
 				memcpy(dev_addr,file_addr,length);
 				ret = ioctl(dev_fd, 0x12345678, length);

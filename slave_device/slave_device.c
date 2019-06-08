@@ -132,21 +132,24 @@ int slave_open(struct inode *inode, struct file *filp)
 
 static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	if(remap_pfn_range(vma,vma->vm_start,vma->vm_pgoff,vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EAGAIN;
 	vma->vm_private_data = filp->private_data;
 	vma->vm_ops = &my_mmap_vm_ops;
+	vma->vm_flags |= VM_RESERVED;
+
+	if(remap_pfn_range(vma,vma->vm_start,virt_to_phys(vma->vm_private_data)>>PAGE_SHIFT,vma->vm_end - vma->vm_start, vma->vm_page_prot))
+		return -EAGAIN;
+
 	my_mmap_open(vma);
 	return 0;
 }
 
 void my_mmap_open(struct vm_area_struct *vma)
 {
-	/* Do nothing */
+	return;
 }
 void my_mmap_close(struct vm_area_struct *vma)
 {
-	/* Do nothing */
+	return;
 }
 
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
@@ -169,7 +172,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 
 	switch(ioctl_num){
 		case slave_IOCTL_CREATESOCK:// create socket and connect to master
-            printk("slave device ioctl create socket");
+			printk("slave device ioctl create socket");
 
 			if(copy_from_user(ip, (char*)ioctl_param, sizeof(ip)))
 				return -ENOMEM;
@@ -201,15 +204,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			while(1){
-	            recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
-	            if (recv_n == 0) break;
-	            memcpy(file->private_data + offset, buf, recv_n);
-	            offset += recv_n;
-	            if (offset >= PAGE_SIZE * NPAGES) break;
-	         }
-	        ret = offset;
-	        break;
+			recv_n = krecv(sockfd_cli, buf, sizeof(buf), 0);
+			ret = recv_n;
+			break;
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
 			{

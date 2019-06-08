@@ -20,7 +20,7 @@ int main (int argc, char* argv[])
 {
 	char buf[BUF_SIZE];
 	int i, ret, dev_fd, file_fd;// the fd for the device and the fd for the input file
-	size_t nread, file_size = 0, data_size = -1;
+	size_t nread, file_size = 0, data_size = -1, offset = 0, length;
 	char file_name[50];
 	char method[20];
 	char ip[20];
@@ -53,6 +53,25 @@ int main (int argc, char* argv[])
 				write(file_fd, buf, nread); //write to the input file
 				file_size += nread;
 			} while(nread > 0);
+			break;
+		case 'm'://mmap : mmap()/memcpy()
+			while((ret = ioctl(dev_fd, 0x12345678)) > 0)
+			{
+				while(ret == 0 && file_size == 0)
+					ret = ioctl(dev_fd, 0x12345678);
+
+				length = ret;
+				char *file_addr, *dev_addr;
+				file_addr = mmap(NULL, length, PROT_WRITE, MAP_SHARED, file_fd, offset);
+				dev_addr = mmap(NULL, length, PROT_READ, MAP_SHARED, dev_fd, 0);
+
+				memcpy(file_addr,dev_addr,length);
+
+				munmap(file_addr, length);
+				munmap(dev_addr, length);
+				offset += length;
+			}
+			file_size = offset;
 			break;
 	}
 

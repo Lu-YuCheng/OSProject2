@@ -176,10 +176,13 @@ int master_open(struct inode *inode, struct file *filp)
 
 static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	if(remap_pfn_range(vma,vma->vm_start,vma->vm_pgoff,vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EAGAIN;
 	vma->vm_private_data = filp->private_data;
 	vma->vm_ops = &my_mmap_vm_ops;
+	vma->vm_flags |= VM_RESERVED;
+
+	if(remap_pfn_range(vma,vma->vm_start,virt_to_phys(vma->vm_private_data)>>PAGE_SHIFT,vma->vm_end - vma->vm_start, vma->vm_page_prot))
+		return -EAGAIN;
+
 	my_mmap_open(vma);
 	return 0;
 }
