@@ -134,7 +134,6 @@ static int __init master_init(void)
 		printk("listen failed\n");
 		return -1;
 	}
-	/*
 	if((wq = create_workqueue("master_wq")) == NULL)
 	{
 		printk(KERN_ERR "create_workqueue returned NULL\n");
@@ -142,7 +141,6 @@ static int __init master_init(void)
 	}
 	
 	queue_work(wq, &work);
-	*/
 	
     printk("master_device init OK\n");
 	set_fs(old_fs);
@@ -158,9 +156,7 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
-	/*
 	if(wq != NULL)	destroy_workqueue(wq);
-	*/
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
@@ -253,7 +249,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	return ret;
 }
 
-#ifndef ASYCHRONOUSIO
+#ifdef SYCHRONOUSIO
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
 //call when user is writing to this device
@@ -268,21 +264,14 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 #else
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
-	size_t rlen;
+	size_t nsend;
 	char msg[BUF_SIZE];
 	
-	rlen = count < BUF_SIZE ? count : BUF_SIZE;
-	
-	if(copy_from_user(msg, buf, rlen))
+	if(copy_from_user(msg, buf, BUF_SIZE))
 		return -ENOMEM;
-		
-	if(rlen > 0) {
-		msg[rlen] = 0;
-		printk(KERN_INFO "recv_from_master_program: %s", msg);
-		ksend(sockfd_cli, msg, rlen, 0);
-	}
+	nsend = ksend(sockfd_cli, msg, BUF_SIZE, 0);
 
-	return rlen;
+	return nsend;
 }
 #endif
 

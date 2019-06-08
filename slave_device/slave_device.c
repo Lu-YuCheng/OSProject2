@@ -98,14 +98,12 @@ static int __init slave_init(void)
 		return ret;
 	}
 
-	/*	
 	if((wq = create_workqueue("slave_wq")) == NULL){
 		printk(KERN_ERR "create_workqueue returned NULL\n");
 		return 1;
 	}
 
 	queue_work(wq, &work);
-	*/
 
 	printk(KERN_INFO "slave has been registered!\n");
 
@@ -115,9 +113,7 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
-	/*
 	if(wq != NULL)	destroy_workqueue(wq);
-	*/
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
@@ -235,7 +231,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	return ret;
 }
 
-#ifndef ASYCHRONOUSIO
+#ifdef SYCHRONOUSIO
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
 //call when user is reading from this device
@@ -249,21 +245,13 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 #else
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
-	size_t rlen;
+	size_t nrecv;
 	char msg[BUF_SIZE];
 	
-	rlen = count < BUF_SIZE ? count : BUF_SIZE;
-	
-	krecv(sockfd_cli, msg, rlen, 0);
-	
-	if(rlen > 0) {
-		msg[rlen] = 0;
-		printk(KERN_INFO "recv_from_ksocket: %s", msg);
-		if(copy_to_user(buf, msg, rlen))
-			return -ENOMEM;
-	}
-		
-	return rlen;
+	nrecv = krecv(sockfd_cli, msg, BUF_SIZE, 0);
+	if(copy_to_user(buf, msg, nrecv))
+		return -ENOMEM;
+	return nrecv;
 }
 #endif
 
