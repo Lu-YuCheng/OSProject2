@@ -97,14 +97,14 @@ static int __init slave_init(void)
 		printk(KERN_ERR "misc_register failed!\n");
 		return ret;
 	}
-
+	/*
 	if((wq = create_workqueue("slave_wq")) == NULL){
 		printk(KERN_ERR "create_workqueue returned NULL\n");
 		return 1;
 	}
-
+	
 	queue_work(wq, &work);
-
+	*/
 	printk(KERN_INFO "slave has been registered!\n");
 
 	return 0;
@@ -113,7 +113,7 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
-	if(wq != NULL)	destroy_workqueue(wq);
+	//if(wq != NULL)	destroy_workqueue(wq);
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
@@ -231,7 +231,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	return ret;
 }
 
-#ifdef SYCHRONOUSIO
+#ifndef ASYCHRONOUSIO
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
 //call when user is reading from this device

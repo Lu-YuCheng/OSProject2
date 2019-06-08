@@ -133,7 +133,7 @@ static int __init master_init(void)
 	{
 		printk("listen failed\n");
 		return -1;
-	}
+	}/*
 	if((wq = create_workqueue("master_wq")) == NULL)
 	{
 		printk(KERN_ERR "create_workqueue returned NULL\n");
@@ -141,7 +141,7 @@ static int __init master_init(void)
 	}
 	
 	queue_work(wq, &work);
-	
+	*/
     printk("master_device init OK\n");
 	set_fs(old_fs);
 	return 0;
@@ -156,7 +156,7 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
-	if(wq != NULL)	destroy_workqueue(wq);
+	//if(wq != NULL)	destroy_workqueue(wq);
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
@@ -249,7 +249,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	return ret;
 }
 
-#ifdef SYCHRONOUSIO
+#ifndef ASYCHRONOUSIO
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
 //call when user is writing to this device
