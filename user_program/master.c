@@ -80,7 +80,7 @@ int main (int argc, char* argv[])
 	gettimeofday(&end, NULL);
 	
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %lu bytes\n", trans_time, file_size / 8);
+	printf("Transmission time: %lf ms, File size: %lu bytes\n", trans_time, file_size);
 
 	close(file_fd);
 	close(dev_fd);
