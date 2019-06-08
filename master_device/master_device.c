@@ -69,12 +69,11 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
-// struct for workqueue
+//struct for workqueue
+#define work_handler (void*)send_msg
 static struct workqueue_struct *wq;
-DECLARE_WORK(work, (void*)send_msg);
+DECLARE_WORK(work, work_handler);
 DECLARE_WAIT_QUEUE_HEAD(wait);
-static char sockbuf[BUF_SIZE];
-static int datalen;
 
 //file operations
 static struct file_operations master_fops = {
@@ -265,21 +264,21 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 #else
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
-	if(copy_from_user(sockbuf, buf, count))
+	size_t rlen;
+	char msg[BUF_SIZE];
+	
+	rlen = count < BUF_SIZE ? count : BUF_SIZE;
+	
+	if(copy_from_user(msg, buf, rlen))
 		return -ENOMEM;
 		
-	datalen = count;
-	//queue_work(wq, &work);
-
-	if(datalen > 0) {
-		sockbuf[datalen] = 0;
-		printk(KERN_INFO "recv_from_master_program: %s", sockbuf);
-		ksend(sockfd_cli, sockbuf, datalen, 0);
+	if(rlen > 0) {
+		msg[rlen] = 0;
+		printk(KERN_INFO "recv_from_master_program: %s", msg);
+		ksend(sockfd_cli, msg, rlen, 0);
 	}
 
-	datalen = 0;	
-	
-	return count;
+	return rlen;
 }
 #endif
 

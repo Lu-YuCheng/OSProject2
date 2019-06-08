@@ -31,9 +31,9 @@
 #define BUF_SIZE 512
 #define NPAGES 50
 
-struct dentry  *file1;//debug file
+struct dentry *file1;//debug file
 
-typedef struct socket * ksocket_t;
+typedef struct socket *ksocket_t;
 
 //newly added functions and structure for mmap
 static int my_mmap(struct file *filp, struct vm_area_struct *vma);
@@ -64,12 +64,11 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-// struct for workqueue
+//struct for workqueue
+#define work_handler (void*)receive_msg
 static struct workqueue_struct *wq;
-DECLARE_WORK(work, (void*)receive_msg);
+DECLARE_WORK(work, work_handler);
 DECLARE_WAIT_QUEUE_HEAD(wait);
-static char sockbuf[BUF_SIZE];
-static int datalen;
 
 //file operations
 static struct file_operations slave_fops = {
@@ -119,7 +118,6 @@ static void __exit slave_exit(void)
 	debugfs_remove(file1);
 }
 
-
 int slave_close(struct inode *inode, struct file *filp)
 {
 	kfree(filp->private_data);
@@ -141,8 +139,6 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 	my_mmap_open(vma);
 	return 0;
 }
-
-// static char ip[20];
 
 void my_mmap_open(struct vm_area_struct *vma)
 {
@@ -214,7 +210,6 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	         }
 	        ret = offset;
 	        break;
-
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
 			{
@@ -240,7 +235,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 }
 
 #ifndef ASYCHRONOUSIO
-ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
+ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
 //call when user is reading from this device
 	char msg[BUF_SIZE];
@@ -250,25 +245,24 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 		return -ENOMEM;
 	return len;
 }
-char *usr_buf_addr;
 #else
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
-	int len;
+	size_t rlen;
+	char msg[BUF_SIZE];
 	
-	len = krecv(sockfd_cli, sockbuf, sizeof(sockbuf), 0);
-	usr_buf_addr = buf;
-	datalen = len;
+	rlen = count < BUF_SIZE ? count : BUF_SIZE;
 	
-	if(datalen > 0) {
-		sockbuf[datalen] = 0;
-		printk(KERN_INFO "recv_from_ksocket: %s", sockbuf);
-		copy_to_user(usr_buf_addr, sockbuf, datalen);
+	krecv(sockfd_cli, msg, rlen, 0);
+	
+	if(rlen > 0) {
+		msg[rlen] = 0;
+		printk(KERN_INFO "recv_from_ksocket: %s", msg);
+		if(copy_to_user(buf, msg, rlen))
+			return -ENOMEM;
 	}
 		
-	datalen = 0;
-	
-	return len;
+	return rlen;
 }
 #endif
 
