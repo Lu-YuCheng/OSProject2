@@ -10,9 +10,9 @@
 #include <sys/time.h>
 
 #define PAGE_SIZE 4096
-#define BUF_SIZE 512
+#define BUF_SIZE PAGE_SIZE
 #define EXIT_FAILURE 1
-#define HANDLE_FATAL(r, x) if (r < 0) do { fprintf(stderr, "[-] SYSTEM ERROR : %s\n", #x); \
+#define HANDLE_FATAL(r, x) if ((intptr_t)r < 0) do { fprintf(stderr, "[-] SYSTEM ERROR : %s\n", #x); \
 		fprintf(stderr, "\tLocation : %s(), %s:%u\n", __FUNCTION__, __FILE__, __LINE__); \
 		perror("      OS message "); fprintf(stderr, "\n"); return EXIT_FAILURE; } while (0)
 
@@ -62,10 +62,12 @@ int main (int argc, char* argv[])
 
 				length = ret;
 				char *file_addr, *dev_addr;
+				ftruncate(file_fd, offset+length);
 				file_addr = mmap(NULL, length, PROT_WRITE, MAP_SHARED, file_fd, offset);
+				HANDLE_FATAL(file_addr, "Can't mmap to file!");
 				dev_addr = mmap(NULL, length, PROT_READ, MAP_SHARED, dev_fd, 0);
-
-				memcpy(file_addr,dev_addr,length);
+				HANDLE_FATAL(dev_addr, "Can't mmap to slave device!");
+				memcpy(file_addr, dev_addr, length);
 
 				munmap(file_addr, length);
 				munmap(dev_addr, length);

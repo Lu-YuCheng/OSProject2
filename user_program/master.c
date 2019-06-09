@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -11,9 +12,9 @@
 
 #define PAGE_SIZE 4096
 #define NPAGE 50
-#define BUF_SIZE 512
+#define BUF_SIZE PAGE_SIZE
 #define EXIT_FAILURE 1
-#define HANDLE_FATAL(r, x) if (r < 0) do { fprintf(stderr, "[-] SYSTEM ERROR : %s\n", #x); \
+#define HANDLE_FATAL(r, x) if ((intptr_t)r < 0) do { fprintf(stderr, "[-] SYSTEM ERROR : %s\n", #x); \
 		fprintf(stderr, "\tLocation : %s(), %s:%u\n", __FUNCTION__, __FILE__, __LINE__); \
 		perror("      OS message "); fprintf(stderr, "\n"); return EXIT_FAILURE; } while (0)
 
@@ -61,7 +62,9 @@ int main (int argc, char* argv[])
 				if(offset + length > file_size)
 					length = file_size - offset;
 				file_addr = mmap(NULL, length, PROT_READ, MAP_SHARED, file_fd, offset);
+				HANDLE_FATAL(file_addr, "Can't mmap to file!");
 				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_SHARED, dev_fd, 0);
+				HANDLE_FATAL(dev_addr, "Can't mmap to master device!")
 
 				memcpy(dev_addr,file_addr,length);
 				ret = ioctl(dev_fd, 0x12345678, length);

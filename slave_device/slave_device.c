@@ -28,7 +28,7 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-#define BUF_SIZE 512
+#define BUF_SIZE 4096
 #define NPAGES 50
 
 struct dentry *file1;//debug file
