@@ -26,7 +26,6 @@ int main (int argc, char* argv[])
 	int i, ret, dev_fd, file_fd;// the fd for the device and the fd for the input file
 	size_t nread, file_size, offset = 0, length = NPAGE * PAGE_SIZE;
 	char file_name[50], method[20];
-	char *kernel_address = NULL, *file_address = NULL;
 	struct timeval start, end;
 	double trans_time; //calulate the time between the device is opened and it is closed
 
@@ -46,7 +45,10 @@ int main (int argc, char* argv[])
 
 
 	ret = ioctl(dev_fd, 0x12345677); //0x12345677 : create socket and accept the connection from the slave
-	HANDLE_FATAL(ret, "ioclt server create socket error");
+	HANDLE_FATAL(ret, "ioclt server create socket error"); 
+	// Prepare for mmapping
+	char *file_addr = NULL;
+	char *dev_addr = NULL;
 
 	switch (method[0]) {
 		case 'f': //fcntl : read()/write()
@@ -57,21 +59,20 @@ int main (int argc, char* argv[])
 			} while(nread > 0);
 			break;
 		case 'm': //mmap : memcpy() and mmap()
+			dev_addr = mmap(NULL, NPAGE * BUF_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, 0);
+			HANDLE_FATAL(dev_addr, "Can't mmap to master device!");
+			*dev_addr=0;
 			while(offset < file_size) {
-				char *file_addr, *dev_addr;
 				if(offset + length > file_size)
 					length = file_size - offset;
 				file_addr = mmap(NULL, length, PROT_READ, MAP_SHARED, file_fd, offset);
 				HANDLE_FATAL(file_addr, "Can't mmap to file!");
-				dev_addr = mmap(NULL, length, PROT_WRITE, MAP_SHARED, dev_fd, 0);
-				HANDLE_FATAL(dev_addr, "Can't mmap to master device!");
 
 				memcpy(dev_addr,file_addr,length);
 				ret = ioctl(dev_fd, 0x12345678, length);
 				HANDLE_FATAL(ret, "ioctl server sending error");
 
 				munmap(file_addr, length);
-				munmap(dev_addr, length);
 				offset += length;
 			}
 			break;
@@ -84,6 +85,10 @@ int main (int argc, char* argv[])
 	
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
 	printf("Transmission time: %lf ms, File size: %lu bytes\n", trans_time, file_size);
+	if (dev_addr){ // There's a memory region mapping to the device
+		ioctl(dev_fd, 0x1234567a, dev_addr);
+		munmap(dev_addr, NPAGE * PAGE_SIZE);
+	}
 
 	close(file_fd);
 	close(dev_fd);
