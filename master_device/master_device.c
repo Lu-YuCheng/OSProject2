@@ -28,6 +28,7 @@
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
+#define master_PRINT_PAGE_DESCRIPTOR 0x1234567a
 #define BUF_SIZE 4096
 #define NPAGES 50
 
@@ -252,15 +253,30 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			{
 				printk("kclose cli error\n");
 				return -1; } ret = 0; break;
-		default:
-			pgd = pgd_offset(current->mm, ioctl_param);
+		case master_PRINT_PAGE_DESCRIPTOR:
+#define check_table(TYPE, table) \
+	if ( TYPE##_none(table) || TYPE##_bad(table)) { printk("master: bad" # TYPE); break;}
+			printk("master: trying to print page descriptor...");
+            pgd = pgd_offset(current->mm, ioctl_param);
+			check_table(pgd, *pgd);
 			p4d = p4d_offset(pgd, ioctl_param);
+			check_table(p4d, *p4d);
 			pud = pud_offset(p4d, ioctl_param);
+			check_table(pud, *pud);
 			pmd = pmd_offset(pud, ioctl_param);
+			check_table(pmd, *pmd);
 			ptep = pte_offset_kernel(pmd , ioctl_param);
 			pte = *ptep;
+			if (pte_none(pte)){
+				printk("master: bad pte");
+				break;
+			}
 			printk("master: %lX\n", pte);
 			ret = 0;
+			break;
+#undef check_table
+		default:
+			printk("Unrecognized ioctl param!");
 			break;
 	}
 
