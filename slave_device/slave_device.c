@@ -64,6 +64,7 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
+#ifndef ASYCHRONOUSIO
 //struct for workqueue
 #define work_handler_fcntl  (void*)receive_msg
 static struct workqueue_struct *wq_fcntl;
@@ -71,7 +72,7 @@ DECLARE_WORK(work_fcntl, work_handler_fcntl);
 #define work_handler_mmap (void*)slave_ioctl
 static struct workqueue_struct *wq_mmap;
 DECLARE_WORK(work_mmap, work_handler_mmap);
-
+#endif
 
 //file operations
 static struct file_operations slave_fops = {
@@ -109,8 +110,10 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
+	#ifndef ASYCHRONOUSIO
 	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
 	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
+	#endif
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
