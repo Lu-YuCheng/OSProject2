@@ -144,6 +144,8 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 		printk(KERN_ERR "create_workqueue_mmap returned NULL\n");
 		return -1;
 	}
+	
+	queue_work(wq_mmap, &work_mmap);
 	#endif
 	
 	return 0;
