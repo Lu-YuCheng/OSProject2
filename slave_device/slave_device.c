@@ -19,7 +19,6 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>
 #include <asm/page.h>
-#include <linux/workqueue.h>
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -65,10 +64,13 @@ static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
 //struct for workqueue
-#define work_handler (void*)receive_msg
-static struct workqueue_struct *wq;
-DECLARE_WORK(work, work_handler);
-DECLARE_WAIT_QUEUE_HEAD(wait);
+#define work_handler_fcntl  (void*)receive_msg
+static struct workqueue_struct *wq_fcntl;
+DECLARE_WORK(work_fcntl, work_handler_fcntl);
+#define work_handler_mmap (void*)slave_ioctl
+static struct workqueue_struct *wq_mmap;
+DECLARE_WORK(work_mmap, work_handler_mmap);
+
 
 //file operations
 static struct file_operations slave_fops = {
@@ -97,14 +99,7 @@ static int __init slave_init(void)
 		printk(KERN_ERR "misc_register failed!\n");
 		return ret;
 	}
-	/*
-	if((wq = create_workqueue("slave_wq")) == NULL){
-		printk(KERN_ERR "create_workqueue returned NULL\n");
-		return 1;
-	}
 	
-	queue_work(wq, &work);
-	*/
 	printk(KERN_INFO "slave has been registered!\n");
 
 	return 0;
@@ -113,7 +108,8 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
-	//if(wq != NULL)	destroy_workqueue(wq);
+	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
+	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
 }
@@ -140,6 +136,15 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 		return -EAGAIN;
 
 	my_mmap_open(vma);
+	
+	#ifndef ASYCHRONOUSIO
+	if((wq_mmap = create_workqueue("master_wq_mmap")) == NULL)
+	{
+		printk(KERN_ERR "create_workqueue_mmap returned NULL\n");
+		return -1;
+	}
+	#endif
+	
 	return 0;
 }
 
@@ -201,6 +206,17 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("connected to : %s %d\n", tmp, ntohs(addr_srv.sin_port));
 			kfree(tmp);
 			printk("kfree(tmp)");
+			
+			#ifndef ASYCHRONOUSIO
+			if((wq_fcntl = create_workqueue("master_wq_fcntl")) == NULL)
+			{
+				printk(KERN_ERR "create_workqueue_fcntl returned NULL\n");
+				return -1;
+			}
+			
+			queue_work(wq_fcntl, &work_fcntl);
+			#endif
+			
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
@@ -231,7 +247,6 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	return ret;
 }
 
-#ifndef ASYCHRONOUSIO
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 {
 //call when user is reading from this device
@@ -242,18 +257,6 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
 		return -ENOMEM;
 	return len;
 }
-#else
-ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp)
-{
-	size_t nrecv;
-	char msg[BUF_SIZE];
-	
-	nrecv = krecv(sockfd_cli, msg, BUF_SIZE, 0);
-	if(copy_to_user(buf, msg, nrecv))
-		return -ENOMEM;
-	return nrecv;
-}
-#endif
 
 module_init(slave_init);
 module_exit(slave_exit);

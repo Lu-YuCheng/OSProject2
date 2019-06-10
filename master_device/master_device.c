@@ -20,7 +20,6 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
-#include <linux/workqueue.h>
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -70,10 +69,12 @@ static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
 //struct for workqueue
-#define work_handler (void*)send_msg
-static struct workqueue_struct *wq;
-DECLARE_WORK(work, work_handler);
-DECLARE_WAIT_QUEUE_HEAD(wait);
+#define work_handler_fcntl (void*)send_msg
+static struct workqueue_struct *wq_fcntl;
+DECLARE_WORK(work_fcntl, work_handler_fcntl);
+#define work_handler_mmap (void*)master_ioctl
+static struct workqueue_struct *wq_mmap;
+DECLARE_WORK(work_mmap, work_handler_mmap);
 
 //file operations
 static struct file_operations master_fops = {
@@ -133,15 +134,8 @@ static int __init master_init(void)
 	{
 		printk("listen failed\n");
 		return -1;
-	}/*
-	if((wq = create_workqueue("master_wq")) == NULL)
-	{
-		printk(KERN_ERR "create_workqueue returned NULL\n");
-		return -1;
 	}
 	
-	queue_work(wq, &work);
-	*/
     printk("master_device init OK\n");
 	set_fs(old_fs);
 	return 0;
@@ -156,7 +150,8 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
-	//if(wq != NULL)	destroy_workqueue(wq);
+	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
+	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
@@ -184,6 +179,15 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 		return -EAGAIN;
 
 	my_mmap_open(vma);
+	
+	#ifndef ASYCHRONOUSIO
+	if((wq_mmap = create_workqueue("master_wq_mmap")) == NULL)
+	{
+		printk(KERN_ERR "create_workqueue_mmap returned NULL\n");
+		return -1;
+	}
+	#endif
+	
 	return 0;
 }
 void my_mmap_open(struct vm_area_struct *vma)
@@ -223,10 +227,25 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			kfree(tmp);
 			printk("kfree(tmp)");
 			ret = 0;
+			
+			#ifndef ASYCHRONOUSIO
+			if((wq_fcntl = create_workqueue("master_wq_fcntl")) == NULL)
+			{
+				printk(KERN_ERR "create_workqueue_fcntl returned NULL\n");
+				return -1;
+			}
+			
+			queue_work(wq_fcntl, &work_fcntl);
+			#endif
+			
 			break;
 		case master_IOCTL_MMAP:
 			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
 			ret = 0;
+			
+			
+			queue_work(wq_mmap, &work_mmap);
+			
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -260,18 +279,6 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 
 	return count;
 
-}
-#else
-static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
-{
-	size_t nsend;
-	char msg[BUF_SIZE];
-	
-	if(copy_from_user(msg, buf, BUF_SIZE))
-		return -ENOMEM;
-	nsend = ksend(sockfd_cli, msg, BUF_SIZE, 0);
-
-	return nsend;
 }
 #endif
 
