@@ -69,6 +69,7 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
+#ifndef ASYCHRONOUSIO
 //struct for workqueue
 #define work_handler_fcntl (void*)send_msg
 static struct workqueue_struct *wq_fcntl;
@@ -76,6 +77,7 @@ DECLARE_WORK(work_fcntl, work_handler_fcntl);
 #define work_handler_mmap (void*)master_ioctl
 static struct workqueue_struct *wq_mmap;
 DECLARE_WORK(work_mmap, work_handler_mmap);
+#endif
 
 //file operations
 static struct file_operations master_fops = {
@@ -151,8 +153,10 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
+	#ifndef ASYCHRONOUSIO
 	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
 	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
+	#endif
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
@@ -286,7 +290,6 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	return ret;
 }
 
-#ifndef ASYCHRONOUSIO
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
 //call when user is writing to this device
@@ -298,7 +301,6 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 	return count;
 
 }
-#endif
 
 module_init(master_init);
 module_exit(master_exit);
