@@ -12,7 +12,7 @@ The work we define is basically the I/O between kernel socket and I/O method we 
 
 ![ASynchronous I/O](https://raw.githubusercontent.com/Lu-YuCheng/OSProject2/master/photo_collection/62239269_2269922256456707_3956757261598064640_n.png)
 
-|      | Master | Slave |    Time(ms)    | ratio(Syn/Asyn) |
+|      | Master | Slave |    Time(ms)    | Ratio(Syn/Asyn) |
 |:----:|:------:|:-----:|:----------:|:-----------------:|
 |  Syn |  fcntl | fcntl |  6.366000  |                   |
 | Asyn |  fcntl | fcntl |  5.292600  |       120.3%      |
@@ -23,4 +23,4 @@ The work we define is basically the I/O between kernel socket and I/O method we 
 |  Syn |  mmap  |  mmap | 935.238300 |                   |
 | Asyn |  mmap  |  mmap |  15.327100 |       6101%       |
 
-For visual convenience, we got the result into table. Notice that because "master.c" runs before "slave.c", we adopted the slave result time, whileas master result time may contain user’s delay. As shown in the table above, in the first case (fcntl/fcntl) the speed of asyn is 120.3% of one of syn, i.e. asyn one is 20.3% faster than syn one. Second case(mmap/fcntl) also appears to be similar, which is 41.4% faster(Not that similar, though. But comparing to two coming cases). It seems to be satisfying, since the scale of optimization is large enough in real life if we can accelerate I/O by 20 ~ 40 percent. However, what’s hardly stunning is, we speed up the cases with slave running in mmap by 5564% and 6001%, by merely changing I/O policy from synchronous to asychronous!!
+For visual convenience, we got the result into table. Notice that because "master.c" runs before "slave.c", we adopted the slave result time, whileas master result time may contain user’s delay. As shown in the table above, in the first case (fcntl/fcntl) the speed of asyn is 120.3% of one of syn, i.e. asyn one is 20.3% faster than syn one. Second case (mmap/fcntl) also appears to be similar, which is 41.4% faster (Not that similar, though. But comparing to two coming cases). It seems to be satisfying, since the scale of optimization is large enough in real life if we can accelerate I/O by 20 ~ 40 percent. However, what’s hardly stunning is, we speed up the cases with slave running in mmap by 5564% and 6001%, by merely changing I/O policy from synchronous to asychronous!!
