@@ -249,10 +249,6 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		case master_IOCTL_MMAP:
 			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
 			ret = 0;
-			
-			
-			queue_work(wq_mmap, &work_mmap);
-			
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
