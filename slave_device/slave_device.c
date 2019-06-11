@@ -64,7 +64,7 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-#ifndef ASYCHRONOUSIO
+#ifdef ASYCHRONOUSIO
 //struct for workqueue
 #define work_handler_fcntl  (void*)receive_msg
 static struct workqueue_struct *wq_fcntl;
@@ -110,7 +110,7 @@ static int __init slave_init(void)
 static void __exit slave_exit(void)
 {
 	misc_deregister(&slave_dev);
-	#ifndef ASYCHRONOUSIO
+	#ifdef ASYCHRONOUSIO
 	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
 	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
 	#endif
@@ -141,7 +141,7 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	my_mmap_open(vma);
 	
-	#ifndef ASYCHRONOUSIO
+	#ifdef ASYCHRONOUSIO
 	if((wq_mmap = create_workqueue("master_wq_mmap")) == NULL)
 	{
 		printk(KERN_ERR "create_workqueue_mmap returned NULL\n");
@@ -213,7 +213,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			kfree(tmp);
 			printk("kfree(tmp)");
 			
-			#ifndef ASYCHRONOUSIO
+			#ifdef ASYCHRONOUSIO
 			if((wq_fcntl = create_workqueue("master_wq_fcntl")) == NULL)
 			{
 				printk(KERN_ERR "create_workqueue_fcntl returned NULL\n");

@@ -69,7 +69,7 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
-#ifndef ASYCHRONOUSIO
+#ifdef ASYCHRONOUSIO
 //struct for workqueue
 #define work_handler_fcntl (void*)send_msg
 static struct workqueue_struct *wq_fcntl;
@@ -153,7 +153,7 @@ static void __exit master_exit(void)
 		printk("kclose srv error\n");
 		return ;
 	}
-	#ifndef ASYCHRONOUSIO
+	#ifdef ASYCHRONOUSIO
 	if(wq_fcntl != NULL) destroy_workqueue(wq_fcntl);
 	if(wq_mmap != NULL) destroy_workqueue(wq_mmap);
 	#endif
@@ -185,7 +185,7 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	my_mmap_open(vma);
 	
-	#ifndef ASYCHRONOUSIO
+	#ifdef ASYCHRONOUSIO
 	if((wq_mmap = create_workqueue("master_wq_mmap")) == NULL)
 	{
 		printk(KERN_ERR "create_workqueue_mmap returned NULL\n");
@@ -235,7 +235,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			printk("kfree(tmp)");
 			ret = 0;
 			
-			#ifndef ASYCHRONOUSIO
+			#ifdef ASYCHRONOUSIO
 			if((wq_fcntl = create_workqueue("master_wq_fcntl")) == NULL)
 			{
 				printk(KERN_ERR "create_workqueue_fcntl returned NULL\n");
